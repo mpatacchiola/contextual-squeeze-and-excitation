@@ -9,14 +9,9 @@ import collections
 
 from readers.tf_dataset_reader import TfDatasetReader
 from readers.image_folder_reader import ImageFolderReader
+from metrics import calibration
 import backbones
 
-import uninterrupt
-from metrics import calibration
-
-# Run these commands:
-# ulimit -n 50000
-# python test_vtab.py --model=protonet --backbone=EfficientNetB0 --download_path_for_tensorflow_datasets=/media/mp2008/580780a5-904b-4e75-aa33-494b6de511db/tensorflow_datasets --download_path_for_sun397_dataset=/media/mp2008/580780a5-904b-4e75-aa33-494b6de511db/sun397 --log_path=./logs/protonet_MR50x1_seed1_`date +%F_%H%M%S`.csv --image_size=224 --batch_size=512
 
 def topk(output, target, ks=(1,)):
   _, pred = output.topk(max(ks), 1, True, True)
@@ -103,7 +98,7 @@ def main(args):
 
     if(args.model=="uppercase"):
         from models.uppercase import UpperCaSE
-        model = UpperCaSE(backbone, args.device, tot_iterations=500, start_lr=1e-3, stop_lr=1e-5, transform_fn=None)
+        model = UpperCaSE(backbone, args.device, tot_iterations=500, start_lr=1e-3, stop_lr=1e-5)
     else:
         print("[ERROR] The model", args.model, "is not implemented!")
 
@@ -136,10 +131,7 @@ def main(args):
 
     all_ce, all_top1 = [], []
     all_gce, all_ece, all_ace, all_tace, all_sce, all_rmsce = [], [], [], [], [], []
-    with uninterrupt.Uninterrupt() as u:
-      for dataset in datasets_list:
-        if(u.interrupted): break
-    
+    for dataset in datasets_list:
         dataset_name = dataset['name']
         
         if dataset['enabled'] is False:
@@ -186,7 +178,6 @@ def main(args):
         target_log_probs_list = []
         target_labels_list = []
         for batch_idx in range(num_batches):
-            if(u.interrupted): break
             target_images, target_labels = dataset_reader.get_target_batch()
 
             # Normalize the images
