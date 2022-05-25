@@ -20,7 +20,7 @@ The code requires the installation of MetaDataset and VTAB. Please follow the in
 Usage
 -----
 
-**Note**: we have included a pretrained model in the `/checkpoints` folder, EfficientNetB0 with CaSE blocks (reduction 64, min-clip 16), which is the same reported in the paper. This can be directly used for evaluation on MetaDataset and VTAB without the need for meta-training.
+**Note**: we have included a pretrained model in `./checkpoints/UpperCaSE_CaSE64_min16_EfficientNetB0.dat`. This is a pretrained EfficientNetB0 with CaSE blocks (reduction 64, min-clip 16), which is the same reported in the paper. This can be directly used for evaluation on MetaDataset and VTAB without the need for meta-training.
 
 1. MetaDataset requires the following command to be run before every simulation:
 
@@ -38,7 +38,7 @@ export META_DATASET_ROOT=<root directory of the Meta-Dataset repository>
 python run_metadataset.py --model=uppercase --backbone=EfficientNetB0 --data_path=/path_to_metadataset_records --log_path=./logs/uppercase_EfficientNetB0_seed1_`date +%F_%H%M%S`.csv --image_size=224 --num_test_tasks=1200 --mode=train_test
 ```
 
-The log-file will be saved in `./log`. Change the backbone type or image size if you want to try other configurations. Available backbones are: `["BiT-S-R50x1", "ResNet18", "ResNet50", "EfficientNetB0"]`.
+The log-file will be saved in `./log`. Change the backbone type or image size if you want to try other configurations. Available backbones are: `["BiT-S-R50x1", "ResNet18", "EfficientNetB0"]`.
 
 3. For testing on MetaDataset use the following command (replacing with the appropriate paths on your system):
 

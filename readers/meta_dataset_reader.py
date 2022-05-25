@@ -30,7 +30,7 @@ class MetaDatasetReader:
         self.test_set_dict = {}
         tf.compat.v1.disable_eager_execution()
         self.session = tf.compat.v1.Session()
-        gin.parse_config_file('./meta_dataset_config.gin')
+        gin.parse_config_file('./readers/meta_dataset_config.gin')
 
         if mode == 'train' or mode == 'train_test':
             train_episode_description = self._get_train_episode_description(max_way_train, max_support_train,

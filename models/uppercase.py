@@ -4,13 +4,12 @@ import numpy as np
 
 class UpperCaSE():
 
-    def __init__(self, backbone, device, tot_iterations, start_lr=0.00025, stop_lr=1e-6, transform_fn=None):
+    def __init__(self, backbone, device, tot_iterations, start_lr=0.00025, stop_lr=1e-6):
         self.backbone = backbone
         self.device = device
         self.tot_iterations = tot_iterations
         self.start_lr = start_lr
         self.stop_lr = stop_lr
-        self.transform_fn = transform_fn
         self.parameters_values_list = list()
         self.head = None
 
@@ -55,11 +54,7 @@ class UpperCaSE():
         for iteration in range(self.tot_iterations):
             # Sample a mini-batch
             indices = np.random.choice(tot_context_images, size=batch_size, replace=True) # replace to deal with small tasks
-            if(self.transform_fn is not None):
-                with torch.no_grad():
-                    inputs = self.backbone(self.transform_fn(context_images[indices].to(self.device)))
-            else:
-                inputs = context_embeddings[indices]
+            inputs = context_embeddings[indices]
             labels = context_labels[indices]
             # Set the learning rate
             lr = lr_linspace[iteration]
@@ -110,13 +105,7 @@ class UpperCaSE():
             self.head.train()
             for iteration in range(self.tot_iterations):
                 indices = np.random.choice(tot_context_images, size=batch_size, replace=True)
-                if(self.transform_fn is not None):
-                     with torch.no_grad():
-                         selected_context_images = context_images[indices]
-                         selected_context_images = selected_context_images.to(self.device)
-                         inputs = self.backbone(self.transform_fn(selected_context_images))
-                else:
-                     inputs = context_embeddings[indices]
+                inputs = context_embeddings[indices]
                 labels = context_labels[indices]
                 log_probs = torch.log_softmax(self.head(inputs.to(self.device)), dim=1)
                 loss = nll(log_probs, labels)
@@ -168,10 +157,7 @@ class UpperCaSE():
         for iteration in range(self.tot_iterations):
             # Sample a mini-batch
             indices = np.random.choice(tot_context_images, size=batch_size, replace=True)
-            if(self.transform_fn is not None):
-                inputs = self.backbone(self.transform_fn(context_images[indices].to(self.device)))
-            else:
-                inputs = context_embeddings[indices]
+            inputs = context_embeddings[indices]
             labels = context_labels[indices]
             # Set the learning rate
             lr = lr_linspace[iteration]

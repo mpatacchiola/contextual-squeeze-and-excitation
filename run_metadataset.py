@@ -138,10 +138,6 @@ def main(args):
         from backbones import resnet
         backbone = resnet.resnet18(pretrained=True, progress=True, norm_layer=torch.nn.BatchNorm2d, use_adapter=True)
         normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    elif(args.backbone=="ResNet50"):
-        from backbones import resnet
-        backbone = resnet.resnet50(pretrained=True, progress=True, norm_layer=torch.nn.BatchNorm2d)
-        normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     elif(args.backbone=="EfficientNetB0"):
         from backbones import efficientnet
         backbone = efficientnet.efficientnet_b0(pretrained=True, progress=True, norm_layer=torch.nn.BatchNorm2d, use_adapter=True)
@@ -167,21 +163,15 @@ def main(args):
 
     if(args.resume_from!=""):
         checkpoint = torch.load(args.resume_from)
-        backbone.load_state_dict(checkpoint['backbone'])
+        backbone.load_state_dict(checkpoint['backbone'], strict=True)
         print("[INFO] Loaded checkpoint from:", args.resume_from)
     backbone = backbone.to(args.device)
-    
-    train_transform = torchvision.transforms.Compose([
-                                          torchvision.transforms.Resize(int(args.image_size*1.15)),
-                                          torchvision.transforms.RandomCrop(args.image_size),
-                                          torchvision.transforms.RandomHorizontalFlip(),
-                                          ])
 
     test_transform = torchvision.transforms.Compose([normalize])  
 
     if(args.model=="uppercase"):
         from models.uppercase import UpperCaSE
-        model = UpperCaSE(backbone, args.device, tot_iterations=500, start_lr=1e-3, stop_lr=1e-5, transform_fn=None)
+        model = UpperCaSE(backbone, args.device, tot_iterations=500, start_lr=1e-3, stop_lr=1e-5)
     else:
         print("[ERROR] The model", args.model, "is not implemented!")
 
@@ -287,7 +277,7 @@ def main(args):
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--model", choices=["uppercase"], default="uppercase", help="The model used for the evaluation.")
-  parser.add_argument("--backbone", choices=["BiT-S-R50x1", "ResNet18", "ResNet50", "EfficientNetB0"], default="EfficientNetB0", help="The backbone used for the evaluation.")
+  parser.add_argument("--backbone", choices=["BiT-S-R50x1", "ResNet18", "EfficientNetB0"], default="EfficientNetB0", help="The backbone used for the evaluation.")
   parser.add_argument("--data_path", default="../datasets", help="Path to Meta-Dataset records.")
   parser.add_argument("--log_path", default="./log.csv", help="Path to log CSV file for the run.")
   parser.add_argument("--checkpoint_path", default="./checkpoints", help="Path to Meta-Dataset records.")

@@ -411,7 +411,7 @@ class EfficientNet(nn.Module):
         assert adapter in ["eval", "train"]
         assert backbone in ["eval", "train"]
         for name, module in self.named_modules():
-            if(type(module) is CaSE or type(module)):
+            if(type(module) is CaSE):
                 if(adapter=="eval"): module.eval()
                 elif(adapter=="train"): module.train()
                 if(verbose): print(f"Adaptive-layer ... name: {name}; train: {module.training}")
@@ -422,7 +422,7 @@ class EfficientNet(nn.Module):
 
     def reset(self):
         for name, module in self.named_modules():
-            if(type(module) is CaSE or type(module) is SE):
+            if(type(module) is CaSE):
                 module.reset_parameters()            
 
     def count_parameters(self):
