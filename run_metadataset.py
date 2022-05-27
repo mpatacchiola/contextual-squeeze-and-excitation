@@ -54,6 +54,26 @@ def save(backbone, file_path="./checkpoint.dat"):
         backbone_state_dict = backbone.state_dict()
         torch.save({"backbone": backbone_state_dict}, file_path)
 
+def count_parameters(model, adapter, verbose=True):
+        params_total = 0
+        params_backbone = 0
+        params_adapters = 0
+        # Count adapter parameters
+        for module_name, module in model.named_modules():
+            for parameter in module.parameters():
+                if(type(module) is adapter): params_adapters += parameter.numel()
+        # Count all parameters
+        for parameter in model.parameters():
+            params_total += parameter.numel()
+        # Subtract to get the backbone parameters (with no adapters)
+        params_backbone = params_total - params_adapters
+        # Done, printing
+        info_str = f"params-backbone .... {params_backbone} ({(params_backbone/1e6):.2f} M)\n" \
+                   f"params-adapters .... {params_adapters} ({(params_adapters/1e6):.2f} M)\n" \
+                   f"params-total ....... {params_backbone+params_adapters} ({((params_backbone+params_adapters)/1e6):.2f} M)\n"
+        if(verbose): print(info_str)
+        return params_backbone, params_adapters
+        
 def train(args, model, dataset, dataset_list, image_transform, eval_every=5000):
     best_accuracy = 0.0
     best_iteration = 0
@@ -129,7 +149,11 @@ def main(args):
     if(args.device==""):
         args.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print("[INFO] Using device:", str(args.device))
-    
+
+    if(args.adapter == "case"):
+        from adapters.case import CaSE
+        adapter = CaSE
+
     train_set = ['ilsvrc_2012', 'omniglot', 'aircraft', 'cu_birds', 'dtd', 'quickdraw', 'fungi', 'mnist']
     validation_set = ['omniglot', 'aircraft', 'cu_birds', 'dtd', 'quickdraw', 'fungi', 'mscoco']
     test_set = ["omniglot", "aircraft", "cu_birds", "dtd", "quickdraw", "fungi", "traffic_sign", "mscoco"]
@@ -140,7 +164,7 @@ def main(args):
         normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     elif(args.backbone=="EfficientNetB0"):
         from backbones import efficientnet
-        backbone = efficientnet.efficientnet_b0(pretrained=True, progress=True, norm_layer=torch.nn.BatchNorm2d, use_adapter=True)
+        backbone = efficientnet.efficientnet_b0(pretrained=True, progress=True, norm_layer=torch.nn.BatchNorm2d, adaptive_layer=adapter)
         normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     elif(args.backbone=="BiT-S-R50x1"):
         from backbones import bit_resnet
@@ -157,9 +181,11 @@ def main(args):
         quit()
 
     # Print number of params
-    backbone.count_parameters()
+    count_parameters(backbone, adapter=adapter, verbose=True)
     # Call reset method to impose CaSE -> identity-output
-    backbone.reset()
+    for name, module in backbone.named_modules():
+        if(type(module) is adapter):
+            module.reset_parameters() 
 
     if(args.resume_from!=""):
         checkpoint = torch.load(args.resume_from)
@@ -171,7 +197,7 @@ def main(args):
 
     if(args.model=="uppercase"):
         from models.uppercase import UpperCaSE
-        model = UpperCaSE(backbone, args.device, tot_iterations=500, start_lr=1e-3, stop_lr=1e-5)
+        model = UpperCaSE(backbone, adapter, args.device, tot_iterations=500, start_lr=1e-3, stop_lr=1e-5)
     else:
         print("[ERROR] The model", args.model, "is not implemented!")
 
@@ -278,6 +304,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--model", choices=["uppercase"], default="uppercase", help="The model used for the evaluation.")
   parser.add_argument("--backbone", choices=["BiT-S-R50x1", "ResNet18", "EfficientNetB0"], default="EfficientNetB0", help="The backbone used for the evaluation.")
+  parser.add_argument("--adapter", choices=["case"], default="case", help="The adapted used.")
   parser.add_argument("--data_path", default="../datasets", help="Path to Meta-Dataset records.")
   parser.add_argument("--log_path", default="./log.csv", help="Path to log CSV file for the run.")
   parser.add_argument("--checkpoint_path", default="./checkpoints", help="Path to Meta-Dataset records.")

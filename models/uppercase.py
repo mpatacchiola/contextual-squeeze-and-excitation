@@ -4,7 +4,7 @@ import numpy as np
 
 class UpperCaSE():
 
-    def __init__(self, backbone, device, tot_iterations, start_lr=0.00025, stop_lr=1e-6):
+    def __init__(self, backbone, adapter, device, tot_iterations, start_lr=0.00025, stop_lr=1e-6):
         self.backbone = backbone
         self.device = device
         self.tot_iterations = tot_iterations
@@ -15,9 +15,9 @@ class UpperCaSE():
 
         # Accumulates the params of the adapters
         adaptive_params_list = list()
-        for name, param in backbone.named_parameters():
-            if("gamma_generator" in name):
-                adaptive_params_list.append(param)
+        for module_name, module in backbone.named_modules():
+            for parameter in module.parameters():
+                if(type(module) is adapter): adaptive_params_list.append(parameter)
 
         if(len(adaptive_params_list) > 0):
             self.optimizer = torch.optim.Adam(adaptive_params_list, lr=start_lr)
