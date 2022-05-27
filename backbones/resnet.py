@@ -124,7 +124,7 @@ class BasicBlock(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        adapter_layer: Optional[Callable[..., nn.Module]] = None,
+        adaptive_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -136,12 +136,12 @@ class BasicBlock(nn.Module):
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = norm_layer(planes)
-        if(adapter_layer is not None): self.adapter1 = adapter_layer(planes)
+        if(adaptive_layer is not None): self.adapter1 = adaptive_layer(planes)
         else: self.adapter1 = None
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = norm_layer(planes)
-        if(adapter_layer is not None): self.adapter2 = adapter_layer(planes)
+        if(adaptive_layer is not None): self.adapter2 = adaptive_layer(planes)
         else: self.adapter2 = None
         self.downsample = downsample
         self.stride = stride
@@ -188,7 +188,7 @@ class Bottleneck(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        adapter_layer: Optional[Callable[..., nn.Module]] = None,
+        adaptive_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -197,9 +197,12 @@ class Bottleneck(nn.Module):
         # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv1x1(inplanes, width)
         self.bn1 = norm_layer(width)
-        if(adapter_layer is not None): self.adapter1 = adapter_layer(width)
+        if(adaptive_layer is not None): self.adapter1 = adaptive_layer(width)
+        else: self.adapter1 = None
         self.conv2 = conv3x3(width, width, stride, groups, dilation)
         self.bn2 = norm_layer(width)
+        if(adaptive_layer is not None): self.adapter2 = adaptive_layer(planes)
+        else: self.adapter2 = None
         self.conv3 = conv1x1(width, planes * self.expansion)
         self.bn3 = norm_layer(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
@@ -212,12 +215,13 @@ class Bottleneck(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-        if(adapter_layer is not None): out = self.adapter1(out)
+        if(self.adapter1 is not None): out = self.adapter1(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
-
+        if(self.adapter2 is not None): out = self.adapter2(out)
+        
         out = self.conv3(out)
         out = self.bn3(out)
 
@@ -241,7 +245,7 @@ class ResNet(nn.Module):
         width_per_group: int = 64,
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        use_adapter=False,
+        adaptive_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
         #_log_api_usage_once(self)
@@ -266,13 +270,13 @@ class ResNet(nn.Module):
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], use_adapter=use_adapter)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], use_adapter=use_adapter)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], use_adapter=use_adapter)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], use_adapter=use_adapter)
+        self.layer1 = self._make_layer(block, 64, layers[0], adaptive_layer=adaptive_layer)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], adaptive_layer=adaptive_layer)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], adaptive_layer=adaptive_layer)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], adaptive_layer=adaptive_layer)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         
-        if use_adapter: self.adapter_last = CaSE(512 * block.expansion)
+        if(adaptive_layer is not None): self.adapter_last = adaptive_layer(512 * block.expansion)
         else: self.adapter_last = None
 
         #self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -301,7 +305,7 @@ class ResNet(nn.Module):
         blocks: int,
         stride: int = 1,
         dilate: bool = False,
-        use_adapter: bool = False,
+        adaptive_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> nn.Sequential:
         norm_layer = self._norm_layer
         downsample = None
@@ -315,13 +319,10 @@ class ResNet(nn.Module):
                 norm_layer(planes * block.expansion),
             )
 
-        if use_adapter: adapter_layer = CaSE
-        else: adapter_layer = None
-
         layers = []
         layers.append(
             block(
-                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer, adapter_layer
+                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer, adaptive_layer
             )
         )
         self.inplanes = planes * block.expansion
@@ -334,7 +335,7 @@ class ResNet(nn.Module):
                     base_width=self.base_width,
                     dilation=self.dilation,
                     norm_layer=norm_layer,
-                    adapter_layer=adapter_layer,
+                    adaptive_layer=adaptive_layer,
                 )
             )
 
@@ -365,27 +366,6 @@ class ResNet(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
 
-    def count_parameters(self):
-      params_backbone = 0
-      params_adapters = 0
-      for name, parameter in self.named_parameters():
-          if("set_encoder" in name):
-              params_adapters += parameter.numel()
-          elif("gamma_generator" in name):
-              params_adapters += parameter.numel()
-          else:
-              params_backbone += parameter.numel()
-      # Done, printing
-      info_str = f"params-backbone .... {params_backbone} ({(params_backbone/1e6):.2f} M)\n" \
-                 f"params-adapters .... {params_adapters} ({(params_adapters/1e6):.2f} M)\n" \
-                 f"params-total ....... {params_backbone+params_adapters} ({((params_backbone+params_adapters)/1e6):.2f} M)\n"
-      print(info_str)
-
-    def reset(self):
-      for name, module in self.named_modules():
-          if(type(module) is CaSE):
-              module.reset_parameters()
-
     def set_mode(self, adapter: str, backbone: str, verbose: bool = False):
         assert adapter in ["eval", "train"]
         assert backbone in ["eval", "train"]
@@ -405,17 +385,17 @@ def _resnet(
     layers: List[int],
     pretrained: bool,
     progress: bool,
-    use_adapter: bool,
+    adaptive_layer: Optional[Callable[..., nn.Module]] = None,
     **kwargs: Any,
 ) -> ResNet:
-    model = ResNet(block, layers, use_adapter=use_adapter, **kwargs)
+    model = ResNet(block, layers, adaptive_layer=adaptive_layer, **kwargs)
     if pretrained:
         state_dict = load_state_dict_from_url(model_urls[arch], progress=progress)
         model.load_state_dict(state_dict, strict=False)
     return model
 
     
-def resnet18(pretrained: bool = False, progress: bool = True, use_adapter: bool = False, **kwargs: Any) -> ResNet:
+def resnet18(pretrained: bool = False, progress: bool = True, adaptive_layer: Optional[Callable[..., nn.Module]] = None, **kwargs: Any) -> ResNet:
     r"""ResNet-18 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
@@ -423,7 +403,7 @@ def resnet18(pretrained: bool = False, progress: bool = True, use_adapter: bool 
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet("resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, use_adapter, **kwargs)
+    return _resnet("resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, adaptive_layer=adaptive_layer, **kwargs)
 
 
 def resnet34(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
@@ -437,7 +417,7 @@ def resnet34(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> 
     return _resnet("resnet34", BasicBlock, [3, 4, 6, 3], pretrained, progress, **kwargs)
 
 
-def resnet50(pretrained: bool = False, progress: bool = True, use_adapter: bool = False, **kwargs: Any) -> ResNet:
+def resnet50(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
     r"""ResNet-50 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
@@ -445,7 +425,7 @@ def resnet50(pretrained: bool = False, progress: bool = True, use_adapter: bool 
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet("resnet50", Bottleneck, [3, 4, 6, 3], pretrained, progress, use_adapter, **kwargs)
+    return _resnet("resnet50", Bottleneck, [3, 4, 6, 3], pretrained, progress, **kwargs)
 
 
 def resnet101(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:

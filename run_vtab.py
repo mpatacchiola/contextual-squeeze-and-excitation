@@ -67,7 +67,7 @@ def main(args):
 
     if(args.backbone=="ResNet18"):
         from backbones import resnet
-        backbone = resnet.resnet18(pretrained=True, progress=True, norm_layer=torch.nn.BatchNorm2d, use_adapter=True)
+        backbone = resnet.resnet18(pretrained=True, progress=True, norm_layer=torch.nn.BatchNorm2d, adaptive_layer=adapter)
         normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     elif(args.backbone=="ResNet50"):
         from backbones import resnet
