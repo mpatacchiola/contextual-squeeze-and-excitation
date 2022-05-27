@@ -56,61 +56,6 @@ def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
-class CaSE(nn.Module):
-  def __init__(self, cin, reduction=64, min_units=16, standardize=True, out_mul=2.0, device=None, dtype=None):
-      """
-      Initialize a CaSE adaptive block.
-  
-      Parameters:
-      cin (int): number of input channels.
-      reduction (int): divider for computing number of hidden units.
-      min_units (int): clip hidden units to this value (if lower).
-      standardize (bool): standardize the input for the MLP.
-      out_mul (float): multiply the MLP output by this value.
-      """
-      factory_kwargs = {'device': device, 'dtype': dtype}
-      super(CaSE, self).__init__()
-      self.cin = cin
-      self.standardize = standardize
-      self.out_mul = out_mul
-
-      # Gamma-generator
-      hidden_features = max(min_units, cin // reduction)
-      self.gamma_generator = nn.Sequential(OrderedDict([
-          ('gamma_lin1', nn.Linear(cin, hidden_features, bias=True, **factory_kwargs)),
-          ('gamma_silu1', nn.SiLU()),
-          ('gamma_lin2', nn.Linear(hidden_features, hidden_features, bias=True, **factory_kwargs)),
-          ('gamma_silu2', nn.SiLU()),
-          ('gamma_lin3', nn.Linear(hidden_features, cin, bias=True, **factory_kwargs)),
-          ('gamma_sigmoid', nn.Sigmoid()),
-        ]))
-
-      self.gamma = torch.tensor([1.0]) # Set to one for the moment
-      self.reset_parameters()
-
-  def reset_parameters(self):      
-      torch.nn.init.zeros_(self.gamma_generator.gamma_lin3.weight)
-      torch.nn.init.zeros_(self.gamma_generator.gamma_lin3.bias)
-
-  def forward(self, x):
-      # Adaptive mode
-      if(self.training):
-          self.gamma = torch.mean(x, dim=[0,2,3]) # spatial + context pooling
-          if(self.standardize):
-                  self.gamma = (self.gamma - torch.mean(self.gamma)) / torch.sqrt(torch.var(self.gamma, unbiased=False)+1e-5)
-          self.gamma = self.gamma.unsqueeze(0) #-> [1,channels]
-          self.gamma = self.gamma_generator(self.gamma) * self.out_mul
-          self.gamma = self.gamma.reshape([1,-1,1,1])
-          return self.gamma * x # Apply gamma to the input and return
-      # Inference Mode
-      else:
-          self.gamma = self.gamma.to(x.device)
-          return self.gamma * x # Use previous gamma
-
-  def extra_repr(self) -> str:
-        return 'cin={}'.format(self.cin)
-
-
 class BasicBlock(nn.Module):
     expansion: int = 1
 
@@ -276,6 +221,8 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], adaptive_layer=adaptive_layer)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         
+        self.adaptive_layer = adaptive_layer
+        
         if(adaptive_layer is not None): self.adapter_last = adaptive_layer(512 * block.expansion)
         else: self.adapter_last = None
 
@@ -370,14 +317,14 @@ class ResNet(nn.Module):
         assert adapter in ["eval", "train"]
         assert backbone in ["eval", "train"]
         for name, module in self.named_modules():
-            if(type(module) is CaSE):
+            if(type(module) is self.adaptive_layer):
                 if(adapter=="eval"): module.eval()
                 elif(adapter=="train"): module.train()
-                if(verbose): print(f"CaSE-layer ...... name: {name}; train: {module.training}")
+                if(verbose): print(f"Adaptive-layer ... name: {name}; train: {module.training}")
             else:
                 if(backbone=="eval"): module.eval()
                 elif(backbone=="train"): module.train()
-                if(verbose): print(f"Backbone-layer .. name: {name}; train: {module.training}")
+                if(verbose): print(f"Backbone-layer ... name: {name}; train: {module.training}")
 
 def _resnet(
     arch: str,
