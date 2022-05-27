@@ -79,7 +79,7 @@ def main(args):
         normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     elif(args.backbone=="BiT-S-R50x1"):
         from backbones import bit_resnet
-        backbone = bit_resnet.KNOWN_MODELS[args.backbone](use_adapter=True)
+        backbone = bit_resnet.KNOWN_MODELS[args.backbone](adaptive_layer=adapter)
         if(args.resume_from!=""):
             checkpoint = torch.load(args.resume_from)
             backbone.load_state_dict(checkpoint['backbone'])

@@ -17,6 +17,12 @@ The code requires the installation of MetaDataset and VTAB. Please follow the in
 - https://github.com/google-research/meta-dataset
 - https://github.com/cambridge-mlg/LITE
 
+For the pretrained ResNet50-S you need to download the model from the [Big Transfer repository](https://github.com/google-research/big_transfer):
+
+```
+wget wget https://storage.googleapis.com/bit_models/BiT-S-R50x1.npz
+```
+
 Usage
 -----
 

@@ -17,6 +17,7 @@
 
 import math
 from collections import OrderedDict  # pylint: disable=g-importing-member
+from typing import Any, Callable, Optional, List, Sequence
 
 import torch
 import torch.nn as nn
@@ -51,61 +52,6 @@ def tf2th(conv_weights):
   return torch.from_numpy(conv_weights)
 
 
-class CaSE(nn.Module):
-  def __init__(self, cin, reduction=64, min_units=16, standardize=True, out_mul=2.0, device=None, dtype=None):
-      """
-      Initialize a CaSE adaptive block.
-  
-      Parameters:
-      cin (int): number of input channels.
-      reduction (int): divider for computing number of hidden units.
-      min_units (int): clip hidden units to this value (if lower).
-      standardize (bool): standardize the input for the MLP.
-      out_mul (float): multiply the MLP output by this value.
-      """
-      factory_kwargs = {'device': device, 'dtype': dtype}
-      super(CaSE, self).__init__()
-      self.cin = cin
-      self.standardize = standardize
-      self.out_mul = out_mul
-
-      # Gamma-generator
-      hidden_features = max(min_units, cin // reduction)
-      self.gamma_generator = nn.Sequential(OrderedDict([
-          ('gamma_lin1', nn.Linear(cin, hidden_features, bias=True, **factory_kwargs)),
-          ('gamma_silu1', nn.SiLU()),
-          ('gamma_lin2', nn.Linear(hidden_features, hidden_features, bias=True, **factory_kwargs)),
-          ('gamma_silu2', nn.SiLU()),
-          ('gamma_lin3', nn.Linear(hidden_features, cin, bias=True, **factory_kwargs)),
-          ('gamma_sigmoid', nn.Sigmoid()),
-        ]))
-
-      self.gamma = torch.tensor([1.0]) # Set to one for the moment
-      self.reset_parameters()
-
-  def reset_parameters(self):      
-      torch.nn.init.zeros_(self.gamma_generator.gamma_lin3.weight)
-      torch.nn.init.zeros_(self.gamma_generator.gamma_lin3.bias)
-
-  def forward(self, x):
-      # Adaptive mode
-      if(self.training):
-          self.gamma = torch.mean(x, dim=[0,2,3]) # spatial + context pooling
-          if(self.standardize):
-                  self.gamma = (self.gamma - torch.mean(self.gamma)) / torch.sqrt(torch.var(self.gamma, unbiased=False)+1e-5)
-          self.gamma = self.gamma.unsqueeze(0) #-> [1,channels]
-          self.gamma = self.gamma_generator(self.gamma) * self.out_mul
-          self.gamma = self.gamma.reshape([1,-1,1,1])
-          return self.gamma * x # Apply gamma to the input and return
-      # Inference Mode
-      else:
-          self.gamma = self.gamma.to(x.device)
-          return self.gamma * x # Use previous gamma
-
-  def extra_repr(self) -> str:
-        return 'cin={}'.format(self.cin)
-
-
 class PreActBottleneck(nn.Module):
   """Pre-activation (v2) bottleneck block.
 
@@ -115,19 +61,20 @@ class PreActBottleneck(nn.Module):
   Except it puts the stride on 3x3 conv when available.
   """
 
-  def __init__(self, cin, cout=None, cmid=None, stride=1, use_adapter=False):
+  def __init__(self, cin, cout=None, cmid=None, stride=1, adaptive_layer: Callable[..., nn.Module] = None):
     super().__init__()
     cout = cout or cin
     cmid = cmid or cout//4
-    self.use_adapter = use_adapter
 
     self.gn1 = nn.GroupNorm(32, cin)
     self.conv1 = conv1x1(cin, cmid)
     self.gn2 = nn.GroupNorm(32, cmid)
-    if(use_adapter): self.adapter2 = CaSE(cmid) #TODO change if needed
+    if(adaptive_layer is not None): self.adapter2 = adaptive_layer(cmid)
+    else: self.adapter2 = None
     self.conv2 = conv3x3(cmid, cmid, stride)
     self.gn3 = nn.GroupNorm(32, cmid)
-    if(use_adapter): self.adapter3 = CaSE(cmid) #TODO change if needed
+    if(adaptive_layer is not None): self.adapter3 = adaptive_layer(cmid)
+    else: self.adapter3 = None
     self.conv3 = conv1x1(cmid, cout)
     self.relu = nn.ReLU(inplace=True)
 
@@ -146,12 +93,12 @@ class PreActBottleneck(nn.Module):
     # Unit's branch
     out = self.conv1(out)
     
-    if(self.use_adapter):
+    if(self.adapter2 is not None):
         out = self.conv2(self.adapter2(self.relu(self.gn2(out))))
     else:
         out = self.conv2(self.relu(self.gn2(out)))
 
-    if(self.use_adapter):
+    if(self.adapter3 is not None):
         out = self.conv3(self.adapter3(self.relu(self.gn3(out))))
     else:
         out = self.conv3(self.relu(self.gn3(out)))
@@ -178,9 +125,11 @@ class PreActBottleneck(nn.Module):
 class ResNetV2(nn.Module):
   """Implementation of Pre-activation (v2) ResNet mode."""
 
-  def __init__(self, block_units, width_factor, use_adapter=False):
+  def __init__(self, block_units, width_factor, adaptive_layer: Callable[..., nn.Module] = None):
     super().__init__()
     wf = width_factor  # shortcut 'cause we'll use it a lot.
+
+    self.adaptive_layer = adaptive_layer
 
     # The following will be unreadable if we split lines.
     # pylint: disable=line-too-long
@@ -194,20 +143,20 @@ class ResNetV2(nn.Module):
 
     self.body = nn.Sequential(OrderedDict([
         ('block1', nn.Sequential(OrderedDict(
-            [('unit01', PreActBottleneck(cin=64*wf, cout=256*wf, cmid=64*wf, use_adapter=use_adapter))] +
-            [(f'unit{i:02d}', PreActBottleneck(cin=256*wf, cout=256*wf, cmid=64*wf, use_adapter=use_adapter)) for i in range(2, block_units[0] + 1)],
+            [('unit01', PreActBottleneck(cin=64*wf, cout=256*wf, cmid=64*wf, adaptive_layer=adaptive_layer))] +
+            [(f'unit{i:02d}', PreActBottleneck(cin=256*wf, cout=256*wf, cmid=64*wf, adaptive_layer=adaptive_layer)) for i in range(2, block_units[0] + 1)],
         ))),
         ('block2', nn.Sequential(OrderedDict(
-            [('unit01', PreActBottleneck(cin=256*wf, cout=512*wf, cmid=128*wf, stride=2, use_adapter=use_adapter))] +
-            [(f'unit{i:02d}', PreActBottleneck(cin=512*wf, cout=512*wf, cmid=128*wf, use_adapter=use_adapter)) for i in range(2, block_units[1] + 1)],
+            [('unit01', PreActBottleneck(cin=256*wf, cout=512*wf, cmid=128*wf, stride=2, adaptive_layer=adaptive_layer))] +
+            [(f'unit{i:02d}', PreActBottleneck(cin=512*wf, cout=512*wf, cmid=128*wf, adaptive_layer=adaptive_layer)) for i in range(2, block_units[1] + 1)],
         ))),
         ('block3', nn.Sequential(OrderedDict(
-            [('unit01', PreActBottleneck(cin=512*wf, cout=1024*wf, cmid=256*wf, stride=2, use_adapter=use_adapter))] +
-            [(f'unit{i:02d}', PreActBottleneck(cin=1024*wf, cout=1024*wf, cmid=256*wf, use_adapter=use_adapter)) for i in range(2, block_units[2] + 1)],
+            [('unit01', PreActBottleneck(cin=512*wf, cout=1024*wf, cmid=256*wf, stride=2, adaptive_layer=adaptive_layer))] +
+            [(f'unit{i:02d}', PreActBottleneck(cin=1024*wf, cout=1024*wf, cmid=256*wf, adaptive_layer=adaptive_layer)) for i in range(2, block_units[2] + 1)],
         ))),
         ('block4', nn.Sequential(OrderedDict(
-            [('unit01', PreActBottleneck(cin=1024*wf, cout=2048*wf, cmid=512*wf, stride=2, use_adapter=use_adapter))] +
-            [(f'unit{i:02d}', PreActBottleneck(cin=2048*wf, cout=2048*wf, cmid=512*wf, use_adapter=use_adapter)) for i in range(2, block_units[3] + 1)],
+            [('unit01', PreActBottleneck(cin=1024*wf, cout=2048*wf, cmid=512*wf, stride=2, adaptive_layer=adaptive_layer))] +
+            [(f'unit{i:02d}', PreActBottleneck(cin=2048*wf, cout=2048*wf, cmid=512*wf, adaptive_layer=adaptive_layer)) for i in range(2, block_units[3] + 1)],
         ))),
     ]))
     # pylint: enable=line-too-long
@@ -227,43 +176,23 @@ class ResNetV2(nn.Module):
     head_dict = OrderedDict()
     head_dict['gn'] = nn.GroupNorm(32, 2048*wf)
     head_dict['relu'] = nn.ReLU(inplace=True)
-    if use_adapter: head_dict['adapter'] = CaSE(2048*wf)
+    if(adaptive_layer is not None): head_dict['adapter'] = adaptive_layer(2048*wf)
     head_dict['avg'] =nn.AdaptiveAvgPool2d(output_size=1)
     self.head = nn.Sequential(head_dict)
 
   def set_mode(self, adapter: str, backbone: str, verbose: bool = False):
-        assert adapter in ["eval", "train"]
-        assert backbone in ["eval", "train"]
-        for name, module in self.named_modules():
-            if(type(module) is CaSE):
-                if(adapter=="eval"): module.eval()
-                elif(adapter=="train"): module.train()
-                if(verbose): print(f"adapter-layer ...... name: {name}; train: {module.training}")
-            else:
-                if(backbone=="eval"): module.eval()
-                elif(backbone=="train"): module.train()
-                if(verbose): print(f"Backbone-layer .. name: {name}; train: {module.training}")
-
-  def count_parameters(self):
-      params_backbone = 0
-      params_adapters = 0
-      for name, parameter in self.named_parameters():
-          if("set_encoder" in name):
-              params_adapters += parameter.numel()
-          elif("gamma_generator" in name):
-              params_aadapters += parameter.numel()
-          else:
-              params_backbone += parameter.numel()
-      # Done, printing
-      info_str = f"params-backbone .... {params_backbone} ({(params_backbone/1e6):.2f} M)\n" \
-                   f"params-adapters .... {params_adapters} ({(params_adapters/1e6):.2f} M)\n" \
-                   f"params-total ....... {params_backbone+params_adapters} ({((params_backbone+params_adapters)/1e6):.2f} M)\n"
-      print(info_str)
-        
-  def reset(self):
+      assert adapter in ["eval", "train"]
+      assert backbone in ["eval", "train"]
       for name, module in self.named_modules():
-          if(type(module) is CaSE):
-              module.reset_parameters()
+          if(type(module) is self.adaptive_layer):
+              if(adapter=="eval"): module.eval()
+              elif(adapter=="train"): module.train()
+              if(verbose): print(f"Adaptive-layer ... name: {name}; train: {module.training}")
+          else:
+              if(backbone=="eval"): module.eval()
+              elif(backbone=="train"): module.train()
+              if(verbose): print(f"Backbone-layer ... name: {name}; train: {module.training}")  
+
 
   def forward(self, x):
     x = self.head(self.body(self.root(x)))
