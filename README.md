@@ -1,4 +1,4 @@
-This repository includes the code of the paper `"Contextual Squeeze-and-Excitation for Efficient Few-Shot Image Classification"`.
+This repository includes the code of the paper `"Contextual Squeeze-and-Excitation for Efficient Few-Shot Image Classification"` (2022), Patacchiola, Bronskill, Shysheya, Hofmann, Nowozin, Turner [[arXiv]](https://arxiv.org/abs/2206.09843) 
 
 Requirements
 ------------
