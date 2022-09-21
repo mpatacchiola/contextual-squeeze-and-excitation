@@ -1,4 +1,19 @@
-This repository includes the code of the paper `"Contextual Squeeze-and-Excitation for Efficient Few-Shot Image Classification"`.
+Official pytorch implementation of the paper:
+
+*"Contextual Squeeze-and-Excitation for Efficient Few-Shot Image Classification"* (2022) Patacchiola, M., Bronskill, J., Shysheya, A., Hofmann, K., Nowozin, S., Turner R.E., *Advances in Neural Information Processing (NeurIPS)* [[arXiv]](https://arxiv.org/abs/2206.09843)
+
+
+```bibtex
+@inproceedings{patacchiola2022contextual,
+  title={Contextual Squeeze-and-Excitation for Efficient Few-Shot Image Classification},
+  author={Patacchiola, Massimiliano and Bronskill, John and Shysheya, Aliaksandra and Hofmann, Katja and Nowozin, Sebastian and Turner, Richard E},
+  booktitle={Advances in Neural Information Processing Systems},
+  year={2022}
+}
+```
+
+**Overview** Recent years have seen a growth in user-centric applications that require effective knowledge transfer across tasks in the low-data regime. An example is personalization, where a pretrained system is adapted by learning on small amounts of labeled data belonging to a specific user. This setting requires high accuracy under low computational complexity, therefore the Pareto frontier of accuracy vs. adaptation cost plays a crucial role. In this paper we push this Pareto frontier in the few-shot image classification setting with a key contribution: a new adaptive block called Contextual Squeeze-and-Excitation (CaSE) that adjusts a pretrained neural network on a new task to significantly improve performance with a single forward pass of the user data (context). We use meta-trained CaSE blocks to conditionally adapt the body of a network and a fine-tuning routine to adapt a linear head, defining a method called UpperCaSE. UpperCaSE achieves a new state-of-the-art accuracy relative to meta-learners on the 26 datasets of VTAB+MD and on a challenging real-world personalization benchmark (ORBIT), narrowing the gap with leading fine-tuning methods with the benefit of orders of magnitude lower adaptation cost.
+
 
 Requirements
 ------------
@@ -17,7 +32,7 @@ The code requires the installation of MetaDataset and VTAB. Please follow the in
 - https://github.com/google-research/meta-dataset
 - https://github.com/cambridge-mlg/LITE
 
-For the pretrained ResNet50-S you need to download the model from the [Big Transfer repository](https://github.com/google-research/big_transfer):
+For the pretrained ResNet50-S you need to download the model from the [Big Transfer repository](https://github.com/google-research/big_transfer) as follows:
 
 ```
 wget wget https://storage.googleapis.com/bit_models/BiT-S-R50x1.npz
@@ -65,6 +80,6 @@ python printer.py --log_path=./logs/name_of_your_log_gile.csv
 python run_vtab.py --model=uppercase --backbone=EfficientNetB0 --download_path_for_tensorflow_datasets=/path_to_tensorflow_datasets --log_path=./logs/vtab_UpperCaSE_EfficientNetB0_`date +%F_%H%M%S`.csv --image_size=224 --batch_size=50 --download_path_for_sun397_dataset=/path_to_sun397_images --resume_from=/path_to_checkpoint
 ```
 
-Results are saved in the `./logs` folder.
+Results are saved in the `./logs` folder as CSV files.
 
 
