@@ -14,6 +14,7 @@ Official pytorch implementation of the paper:
 
 **Overview** Recent years have seen a growth in user-centric applications that require effective knowledge transfer across tasks in the low-data regime. An example is personalization, where a pretrained system is adapted by learning on small amounts of labeled data belonging to a specific user. This setting requires high accuracy under low computational complexity, therefore the Pareto frontier of accuracy vs. adaptation cost plays a crucial role. In this paper we push this Pareto frontier in the few-shot image classification setting with a key contribution: a new adaptive block called Contextual Squeeze-and-Excitation (CaSE) that adjusts a pretrained neural network on a new task to significantly improve performance with a single forward pass of the user data (context). We use meta-trained CaSE blocks to conditionally adapt the body of a network and a fine-tuning routine to adapt a linear head, defining a method called UpperCaSE. UpperCaSE achieves a new state-of-the-art accuracy relative to meta-learners on the 26 datasets of VTAB+MD and on a challenging real-world personalization benchmark (ORBIT), narrowing the gap with leading fine-tuning methods with the benefit of orders of magnitude lower adaptation cost.
 
+
 Requirements
 ------------
 
@@ -58,12 +59,55 @@ For the pretrained ResNet50-S you need to download the model from the [Big Trans
 wget wget https://storage.googleapis.com/bit_models/BiT-S-R50x1.npz
 ```
 
+
 Generic Usage
 -------------
 
 Our pretrained model can be easily used on a dataset of your choice. If you want to use the model only for inference (no training on MetaDataset) then you just need to install Pytorch.
 
 We provide an example script that runs the pretrained UpperCaSE (with EfficientNetB0) for inference on CIFAR100 and SVHN in the file [example.py](./example.py).
+
+
+Adding CaSE layers to your custom model
+----------------------------------------
+
+The CaSE block is a self-contained module that you can find under [adapters/case.py](./adapters/case.py). You can import and use a CaSE block like any other layer in a sequetial model in Pytorch. We reccomend to place CaSE layers after the activation function (e.g. ReLU, SiLU, etc) as follows:
+
+```python
+import torch
+from case import CaSE
+
+model = torch.nn.Sequential(
+          torch.nn.Conv2d(128, 32, kernel_size=3),
+          torch.nn.ReLU(),
+          CaSE(cin=32, reduction=64, min_units=16)
+          torch.nn.Conv2d(32, 64, kernel_size=3),
+          torch.nn.ReLU()
+          CaSE(cin=64, reduction=64, min_units=16)
+        )
+```
+
+CaSE layers can be trained following this procedure:
+
+1. Train a backbone with a standard supervised-learning routine. It is possible to use Pytorch models pretrained on ImageNet.
+2. Add a set of CaSE layers in the backbone (see the paper for more details about this).
+3. Meta-train the parameters of the CaSE layers (keep frozen the parameters of the backbone).
+
+Step 3 can be easily performed by isolating the learnable parameters of CaSE and passing them to the optimizer as follows:
+
+```python
+import torch
+from case import CaSE
+
+# "backbone" is a pretrained neural net containing CaSE layers
+
+params_list = list()
+for module_name, module in backbone.named_modules():
+    for parameter in module.parameters():
+        if(type(module) is CaSE): params_list.append(parameter)
+        
+optimizer = torch.optim.Adam(params_list, lr=start_lr)
+```
 
 
 Reproducing the experiments
