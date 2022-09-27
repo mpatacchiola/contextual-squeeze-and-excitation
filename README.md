@@ -26,10 +26,24 @@ Requirements
 Installation
 -------------
 
-The code requires the installation of MetaDataset and VTAB. Please follow the instructions reported here:
+**Training on MetaDataset** If you want to train the model on MetaDataset you need to download and prepare the dataset, please follow the instructions reported here:
 
 - https://github.com/google-research/meta-dataset
 - https://github.com/cambridge-mlg/LITE
+
+**Evaluation on VTAB** If you want to evaluate the model on VTAB you need to download and prepare the dataset. Please follow the instructions reported here:
+
+- https://github.com/google-research/task_adaptation
+
+**Installation via Conda** We provide a file called `environment.yml` that you can use to install the conda environment. This can be done with the following command:
+
+```
+conda env create -f environment.yml
+```
+
+This will create an environment called `myenv` that you will need to activate via `conda activate myenv`.
+
+**Pretrained models** We have included a pretrained model in `./checkpoints/UpperCaSE_CaSE64_min16_EfficientNetB0.dat`. This is a pretrained EfficientNetB0 with CaSE blocks (reduction 64, min-clip 16), which is the same reported in the paper. This can be directly used for evaluation on MetaDataset and VTAB without the need for meta-training.
 
 For the pretrained ResNet50-S you need to download the model from the [Big Transfer repository](https://github.com/google-research/big_transfer) as follows:
 
@@ -37,10 +51,18 @@ For the pretrained ResNet50-S you need to download the model from the [Big Trans
 wget wget https://storage.googleapis.com/bit_models/BiT-S-R50x1.npz
 ```
 
-Usage
------
+Generic Usage
+-------------
 
-**Note**: we have included a pretrained model in `./checkpoints/UpperCaSE_CaSE64_min16_EfficientNetB0.dat`. This is a pretrained EfficientNetB0 with CaSE blocks (reduction 64, min-clip 16), which is the same reported in the paper. This can be directly used for evaluation on MetaDataset and VTAB without the need for meta-training.
+Our pretrained model can be easily used on a dataset of your choice. If you want to use the model only for inference (no training on MetaDataset) then you just need to install Pytorch.
+
+We provide and example script that runs the pretrained UpperCaSE (with EfficientNetB0) for inference on CIFAR100 and SVHN in the file [example.py](./example.py)
+
+
+Reproducing the experiments
+---------------------------
+
+To reproduce the results of the paper you need to have installed MetaDataset and VTAB as explained above. After you have done this, follow the instructions below.
 
 1. MetaDataset requires the following command to be run before every simulation:
 
@@ -66,7 +88,6 @@ The log-file will be saved in `./log`. Change the backbone type or image size if
 python run_metadataset.py --model=uppercase --backbone=EfficientNetB0 --data_path=/path_to_metadataset_records --log_path=./logs/uppercase_EfficientNetB0_seed1_`date +%F_%H%M%S`.csv --image_size=224 --num_test_tasks=1200 --mode=test --resume_from=/path_to_checkpoint
 ```
 
-
 4. The MetaDataset results saved in the log file can be printed in a nice way using the `printer.py` by running: 
 
 ```
@@ -80,5 +101,8 @@ python run_vtab.py --model=uppercase --backbone=EfficientNetB0 --download_path_f
 ```
 
 Results are saved in the `./logs` folder as CSV files.
+
+
+
 
 
