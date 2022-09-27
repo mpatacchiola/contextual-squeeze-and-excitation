@@ -17,11 +17,18 @@ Official pytorch implementation of the paper:
 Requirements
 ------------
 
+If you are interested in **meta-training** the model from scratch you need the following packages:
+
 - Python >= 3.7
 - PyTorch >= 1.8
 - TensorFlow >= 2.3 (for Meta-Dataset and VTAB)
 - TensorFlow Datasets >= 4.3 (for VTAB) [[link](https://www.tensorflow.org/datasets)]
 - Gin Config >= 0.4 (for Meta-Dataset)
+
+We also provide a conda environment (see instructions below).
+
+If you are interested in using the model for **inference only** (on a dataset of your choice) you just need Pytorch and common libraries (e.g. Numpy). See the example script here [example.py](./example.py).
+
 
 Installation
 -------------
@@ -56,7 +63,7 @@ Generic Usage
 
 Our pretrained model can be easily used on a dataset of your choice. If you want to use the model only for inference (no training on MetaDataset) then you just need to install Pytorch.
 
-We provide and example script that runs the pretrained UpperCaSE (with EfficientNetB0) for inference on CIFAR100 and SVHN in the file [example.py](./example.py)
+We provide an example script that runs the pretrained UpperCaSE (with EfficientNetB0) for inference on CIFAR100 and SVHN in the file [example.py](./example.py).
 
 
 Reproducing the experiments
@@ -101,8 +108,4 @@ python run_vtab.py --model=uppercase --backbone=EfficientNetB0 --download_path_f
 ```
 
 Results are saved in the `./logs` folder as CSV files.
-
-
-
-
 
