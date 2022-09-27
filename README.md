@@ -90,7 +90,7 @@ model = torch.nn.Sequential(
 CaSE layers can be trained following this procedure:
 
 1. Train a backbone with a standard supervised-learning routine. It is possible to use Pytorch models pretrained on ImageNet.
-2. Add a set of CaSE layers in the backbone (see the paper for more details about this).
+2. Add a set of CaSE layers in the backbone (see the paper for more details about this step).
 3. Meta-train the parameters of the CaSE layers (keep frozen the parameters of the backbone).
 
 Step 3 can be easily performed by isolating the learnable parameters of CaSE and passing them to the optimizer as follows:
@@ -106,7 +106,7 @@ for module_name, module in backbone.named_modules():
     for parameter in module.parameters():
         if(type(module) is CaSE): params_list.append(parameter)
         
-optimizer = torch.optim.Adam(params_list, lr=start_lr)
+optimizer = torch.optim.Adam(params_list, lr=0.001)
 ```
 
 
@@ -152,4 +152,17 @@ python run_vtab.py --model=uppercase --backbone=EfficientNetB0 --download_path_f
 ```
 
 Results are saved in the `./logs` folder as CSV files.
+
+License
+-------
+
+MIT License
+
+Copyright (c) 2022 The authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
