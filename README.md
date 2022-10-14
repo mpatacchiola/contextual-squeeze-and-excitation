@@ -1,3 +1,5 @@
+[![arXiv](https://img.shields.io/badge/arXiv-2112.10751-b31b1b.svg)](https://arxiv.org/abs/2206.09843)
+
 Official pytorch implementation of the paper:
 
 *"Contextual Squeeze-and-Excitation for Efficient Few-Shot Image Classification"* (2022) Patacchiola, M., Bronskill, J., Shysheya, A., Hofmann, K., Nowozin, S., Turner R.E., *Advances in Neural Information Processing (NeurIPS)* [[arXiv]](https://arxiv.org/abs/2206.09843)
