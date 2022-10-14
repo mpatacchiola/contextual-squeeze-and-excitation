@@ -1,4 +1,4 @@
-[![arXiv](https://img.shields.io/badge/arXiv-2112.10751-b31b1b.svg)](https://arxiv.org/abs/2206.09843)
+[![arXiv](https://img.shields.io/badge/arXiv-2206.09843-b31b1b.svg)](https://arxiv.org/abs/2206.09843)
 
 Official pytorch implementation of the paper:
 
